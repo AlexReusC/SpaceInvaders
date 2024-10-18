@@ -1,7 +1,10 @@
 #include <SFML/Graphics.hpp>
 
+#include "Game.h"
+
 int main()
 {
 
-    return 0;
+	Game g("config.txt");
+	g.run();
 }
