@@ -4,6 +4,7 @@
 #include <fstream>
 #include <math.h>
 
+#define PI 3.14159265
 
 Game::Game(const std::string& config)
 {
@@ -15,14 +16,14 @@ void Game::init(const std::string& config)
 	//Read config file
 	std::ifstream fin(config);
 	std::string placeholder;
-	int WINW, WINH, FL, FS;
-	fin >> placeholder >> WINW >> WINH >> FL >> FS;
+	int FL, FS;
+	fin >> placeholder >> m_windowConfig.WW >> m_windowConfig.WH >> FL >> FS;
 	fin >> placeholder >> m_playerConfig.SR >> m_playerConfig.CR >> m_playerConfig.FR >> m_playerConfig.FG >> m_playerConfig.FB >> m_playerConfig.OR >> m_playerConfig.OG >> m_playerConfig.OB >> m_playerConfig.OT >> m_playerConfig.V;
-	fin >> placeholder  >> m_enemyConfig.SR >> m_enemyConfig.CR >> m_enemyConfig.OR >> m_enemyConfig.OG >> m_enemyConfig.OB >> m_enemyConfig.OT >> m_enemyConfig.VMIN >> m_enemyConfig.VMAX >> m_enemyConfig.L >> m_enemyConfig.SI >> m_enemyConfig.SMIN >> m_enemyConfig.SMAX;
+	fin >> placeholder  >> m_enemyConfig.SR >> m_enemyConfig.CR >> m_enemyConfig.SMIN >> m_enemyConfig.SMAX >> m_enemyConfig.OR >> m_enemyConfig.OG >> m_enemyConfig.OB >> m_enemyConfig.OT >> m_enemyConfig.VMIN >> m_enemyConfig.VMAX >> m_enemyConfig.L >> m_enemyConfig.SI;
 	fin >> placeholder  >> m_bulletConfig.SR >> m_bulletConfig.CR >> m_bulletConfig.FR >> m_bulletConfig.FG >> m_bulletConfig.FB >> m_bulletConfig.OR >> m_bulletConfig.OG >> m_bulletConfig.OB >> m_bulletConfig.OT >> m_bulletConfig.V >> m_bulletConfig.L >> m_bulletConfig.S;
 
 
-	m_window.create(sf::VideoMode(WINW, WINH), "Space Invaders");
+	m_window.create(sf::VideoMode(m_windowConfig.WW, m_windowConfig.WH), "Space Invaders");
 	m_window.setFramerateLimit(FL);
 
 	spawnPlayer();
@@ -77,6 +78,15 @@ void Game::sMovement()
 	{
 		e->CTransform->pos.x += e->CTransform->velocity.x;
 		e->CTransform->pos.y += e->CTransform->velocity.y;
+
+		if (e->CTransform->pos.x + m_enemyConfig.CR > m_windowConfig.WW || e->CTransform->pos.x - m_enemyConfig.CR < 0)
+		{
+			e->CTransform->velocity.x *= -1;
+		}
+		if (e->CTransform->pos.y + m_enemyConfig.CR > m_windowConfig.WH || e->CTransform->pos.y - m_enemyConfig.CR < 0)
+		{
+			e->CTransform->velocity.y *= -1;
+		}
 	}
 
 
@@ -205,13 +215,12 @@ void Game::sCollision()
 		{ 
 			auto distance = b->CTransform->pos - e->CTransform->pos;
 			auto bulletRad = b->CShape->circle.getRadius();
-			auto enemyRad = e->CShape->circle.getRadius();
+			auto enemyRad = m_enemyConfig.CR;
 			if ( std::pow(distance.x, 2) + std::pow(distance.y, 2) < std::pow(bulletRad + enemyRad, 2))
 			{
 				b->destroy();
 				e->destroy();
 			}
-
 		}
 	}
 }
@@ -233,19 +242,25 @@ void Game::spawnPlayer()
 void Game::spawnEnemy()
 {
 	auto entity = m_entities.addEntity("enemy");
-	auto enemyRadius = 32.0f; //TODO: change for configuration file value;
 
-	int diffX = 1 + m_window.getSize().x - (enemyRadius * 2);
-	int diffY = 1 + m_window.getSize().y - (enemyRadius * 2);
-	float ex = (rand() % diffX) + enemyRadius;
-	float ey = (rand() % diffY) + enemyRadius;
+	int diffPx = 1 + m_window.getSize().x - (m_enemyConfig.SR * 2);
+	int diffPy = 1 + m_window.getSize().y - (m_enemyConfig.SR * 2);
+	float px = (rand() % diffPx) + m_enemyConfig.SR;
+	float py = (rand() % diffPy) + m_enemyConfig.SR;
 
-	entity->CTransform = std::make_shared<CTransform>(Vec2(ex, ey), Vec2(0.0f, 0.0f), 0.0f);
+	int diffV = 1 + m_enemyConfig.SMAX - m_enemyConfig.SMIN;
+	float v = (rand() % diffV) + m_enemyConfig.SMIN;
+	float angle = rand() % 361;
+
+	float vx = v * std::cos(angle * PI / 180);
+	float vy = v * std::sin(angle * PI / 180);
+
+	entity->CTransform = std::make_shared<CTransform>(Vec2(px, py), Vec2(vx, vy), 0.0f);
 	int red = rand() % 0xFF;
 	int green = rand() % 0xFF;
 	int blue = rand() % 0xFF;
 	int vertices = (rand() % 8) + 3;
-	entity->CShape = std::make_shared<CShape>(enemyRadius, vertices, sf::Color(red, green, blue), sf::Color(0xFF, 0xFF, 0xFF), 2.0f);
+	entity->CShape = std::make_shared<CShape>(m_enemyConfig.SR, vertices, sf::Color(red, green, blue), sf::Color(0xFF, 0xFF, 0xFF), 2.0f);
 }
 
 void Game::spawnSmallEnemies(std::shared_ptr<Entity> entity)
