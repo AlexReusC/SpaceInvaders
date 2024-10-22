@@ -2,6 +2,8 @@
 
 #include <iostream>
 #include <fstream>
+#include <math.h>
+
 
 Game::Game(const std::string& config)
 {
@@ -11,8 +13,17 @@ Game::Game(const std::string& config)
 void Game::init(const std::string& config)
 {
 	//Read config file
-	m_window.create(sf::VideoMode(1280, 720), "Space Invaders");
-	m_window.setFramerateLimit(60);
+	std::ifstream fin(config);
+	std::string placeholder;
+	int WINW, WINH, FL, FS;
+	fin >> placeholder >> WINW >> WINH >> FL >> FS;
+	fin >> placeholder >> m_playerConfig.SR >> m_playerConfig.CR >> m_playerConfig.FR >> m_playerConfig.FG >> m_playerConfig.FB >> m_playerConfig.OR >> m_playerConfig.OG >> m_playerConfig.OB >> m_playerConfig.OT >> m_playerConfig.V;
+	fin >> placeholder  >> m_enemyConfig.SR >> m_enemyConfig.CR >> m_enemyConfig.OR >> m_enemyConfig.OG >> m_enemyConfig.OB >> m_enemyConfig.OT >> m_enemyConfig.VMIN >> m_enemyConfig.VMAX >> m_enemyConfig.L >> m_enemyConfig.SI >> m_enemyConfig.SMIN >> m_enemyConfig.SMAX;
+	fin >> placeholder  >> m_bulletConfig.SR >> m_bulletConfig.CR >> m_bulletConfig.FR >> m_bulletConfig.FG >> m_bulletConfig.FB >> m_bulletConfig.OR >> m_bulletConfig.OG >> m_bulletConfig.OB >> m_bulletConfig.OT >> m_bulletConfig.V >> m_bulletConfig.L >> m_bulletConfig.S;
+
+
+	m_window.create(sf::VideoMode(WINW, WINH), "Space Invaders");
+	m_window.setFramerateLimit(FL);
 
 	spawnPlayer();
 }
@@ -26,6 +37,7 @@ void Game::run()
 		sEnemySpawner();
 		sMovement();
 		sCollision();
+		sLifeSpan();
 		sUserInput();
 		sRender();
 
@@ -39,14 +51,109 @@ void Game::setPaused(bool paused)
 
 void Game::sMovement()
 {
+	m_player->CTransform->velocity = { 0.0f, 0.0f };
+	if (m_player->CInput->up)
+	{
+		m_player->CTransform->velocity.y = -2;
+
+	}
+	if (m_player->CInput->left)
+	{
+		m_player->CTransform->velocity.x = -2;
+
+	}
+	if (m_player->CInput->down)
+	{
+		m_player->CTransform->velocity.y = 2;
+
+	}
+	if (m_player->CInput->right)
+	{
+		m_player->CTransform->velocity.x = 2;
+
+	}
+
+	for (auto e : m_entities.getEntities())
+	{
+		e->CTransform->pos.x += e->CTransform->velocity.x;
+		e->CTransform->pos.y += e->CTransform->velocity.y;
+	}
+
+
 }
 
 void Game::sUserInput()
 {
+	sf::Event event;
+	while (m_window.pollEvent(event))
+	{
+		if (event.type == sf::Event::Closed)
+		{
+			m_running = false;
+		}
+
+		if (event.type == sf::Event::KeyPressed)
+		{
+			switch (event.key.code)
+			{
+				case sf::Keyboard::W:
+					m_player->CInput->up = true;
+					break;
+				case sf::Keyboard::A:
+					m_player->CInput->left = true;
+					break;
+				case sf::Keyboard::S:
+					m_player->CInput->down = true;
+					break;
+				case sf::Keyboard::D:
+					m_player->CInput->right = true;
+					break;
+				default:
+					break;
+			}
+		}
+
+		if (event.type == sf::Event::KeyReleased)
+		{
+			switch (event.key.code)
+			{
+			case sf::Keyboard::W:
+				m_player->CInput->up = false;
+				break;
+			case sf::Keyboard::A:
+				m_player->CInput->left = false;
+				break;
+			case sf::Keyboard::S:
+				m_player->CInput->down = false;
+				break;
+			case sf::Keyboard::D:
+				m_player->CInput->right = false;
+				break;
+			default:
+				break;
+			}
+		}
+
+		if (event.type == sf::Event::MouseButtonPressed)
+		{
+			if (event.mouseButton.button == sf::Mouse::Left)
+			{
+				spawnBullet(m_player, Vec2(event.mouseButton.x, event.mouseButton.y));
+			}
+		}
+	}
 }
 
 void Game::sLifeSpan()
 {
+	for (auto e : m_entities.getEntities("bullet"))
+	{
+		e->CLifeSpan->remaining--;
+		if (e->CLifeSpan->remaining <= 0)
+		{
+			e->destroy();
+		}
+	}
 }
 
 void Game::sRender()
@@ -59,22 +166,65 @@ void Game::sRender()
 	m_player->CShape->circle.setRotation(m_player->CTransform->angle);
 	m_window.draw(m_player->CShape->circle);
 
+	for (auto enemy : m_entities.getEntities("enemy"))
+	{
+		enemy->CShape->circle.setPosition(enemy->CTransform->pos.x, enemy->CTransform->pos.y);
+
+		enemy->CTransform->angle += 1.0f;
+		enemy->CShape->circle.setRotation(m_player->CTransform->angle);
+		m_window.draw(enemy->CShape->circle);
+	}
+
+	for (auto bullet : m_entities.getEntities("bullet"))
+	{
+		bullet->CShape->circle.setPosition(bullet->CTransform->pos.x, bullet->CTransform->pos.y);
+		auto alpha = bullet->CLifeSpan->remaining > 0 ? (bullet->CLifeSpan->remaining * 0xFF) / bullet->CLifeSpan->total : 0;
+		bullet->CShape->circle.setFillColor(sf::Color(0xFF, 0xFF, 0xFF, alpha));
+
+		bullet->CTransform->angle += 1.0f;
+		m_window.draw(bullet->CShape->circle);
+	}
+
 	m_window.display();
 }
 
 void Game::sEnemySpawner()
 {
+	if ( m_currentFrame - m_lastEnemySpawnTime >= 30)
+	{
+		spawnEnemy();
+		m_currentFrame = m_lastEnemySpawnTime;
+	}
 }
 
 void Game::sCollision()
 {
+	for (auto b : m_entities.getEntities("bullet"))
+	{
+		for (auto e : m_entities.getEntities("enemy"))
+		{ 
+			auto distance = b->CTransform->pos - e->CTransform->pos;
+			auto bulletRad = b->CShape->circle.getRadius();
+			auto enemyRad = e->CShape->circle.getRadius();
+			if ( std::pow(distance.x, 2) + std::pow(distance.y, 2) < std::pow(bulletRad + enemyRad, 2))
+			{
+				b->destroy();
+				e->destroy();
+			}
+
+		}
+	}
 }
 
 void Game::spawnPlayer()
 {
 	auto entity = m_entities.addEntity("player");
-	entity->CTransform = std::make_shared<CTransform>(Vec2(200.0f, 200.0f), Vec2(1.0f, 1.0f), 0.0f);
-	entity->CShape = std::make_shared<CShape>(32.0f, 8, sf::Color(10, 10, 10), sf::Color(255, 0, 0), 4.0f);
+
+	float ex = m_window.getSize().x / 2;
+	float ey = m_window.getSize().y / 2;
+
+	entity->CTransform = std::make_shared<CTransform>(Vec2(ex, ey), Vec2(0.0f, 0.0f), 0.0f);
+	entity->CShape = std::make_shared<CShape>(32.0f, 8, sf::Color(0, 0, 0, 0), sf::Color(0xFF, 0, 0), 4.0f);
 	entity->CInput = std::make_shared<CInput>();
 
 	m_player = entity;
@@ -82,14 +232,37 @@ void Game::spawnPlayer()
 
 void Game::spawnEnemy()
 {
+	auto entity = m_entities.addEntity("enemy");
+	auto enemyRadius = 32.0f; //TODO: change for configuration file value;
+
+	int diffX = 1 + m_window.getSize().x - (enemyRadius * 2);
+	int diffY = 1 + m_window.getSize().y - (enemyRadius * 2);
+	float ex = (rand() % diffX) + enemyRadius;
+	float ey = (rand() % diffY) + enemyRadius;
+
+	entity->CTransform = std::make_shared<CTransform>(Vec2(ex, ey), Vec2(0.0f, 0.0f), 0.0f);
+	int red = rand() % 0xFF;
+	int green = rand() % 0xFF;
+	int blue = rand() % 0xFF;
+	int vertices = (rand() % 8) + 3;
+	entity->CShape = std::make_shared<CShape>(enemyRadius, vertices, sf::Color(red, green, blue), sf::Color(0xFF, 0xFF, 0xFF), 2.0f);
 }
 
 void Game::spawnSmallEnemies(std::shared_ptr<Entity> entity)
 {
 }
 
-void Game::spawnBullets(std::shared_ptr<Entity> entity, const Vec2& mousePos)
+void Game::spawnBullet(std::shared_ptr<Entity> entity, const Vec2& target)
 {
+	auto bullet = m_entities.addEntity("bullet");
+	auto normalizedVec = target.normalize(entity->CTransform->pos);
+
+	bullet->CTransform = std::make_shared<CTransform>(
+		m_player->CTransform->pos + (normalizedVec * m_player->CShape->circle.getRadius()),
+		normalizedVec * 20,
+		0);
+	bullet->CShape = std::make_shared<CShape>(10, 8, sf::Color(0xFF, 0xFF, 0xFF), sf::Color(0, 0, 0), 2);
+	bullet->CLifeSpan = std::make_shared<CLifespan>(60);
 }
 
 void Game::spawnSpecialWeapon(std::shared_ptr<Entity> entity)

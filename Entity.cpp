@@ -7,20 +7,21 @@ Entity::Entity(const size_t id, const std::string& tag)
 
 bool Entity::isActive() const
 {
-    return false;
+    return m_active;
 }
 
 const std::string& Entity::tag() const
 {
-    // TODO: insert return statement here
-    return "";
+    return m_tag;
 }
 
 const size_t Entity::id() const
 {
-    return size_t();
+    return m_id;
 }
 
 void Entity::destroy()
 {
+    //Entity manager will clean it
+    m_active = false;
 }
