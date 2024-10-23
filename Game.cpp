@@ -79,6 +79,11 @@ void Game::sMovement()
 		e->CTransform->pos.x += e->CTransform->velocity.x;
 		e->CTransform->pos.y += e->CTransform->velocity.y;
 
+
+	}
+
+	for (auto e : m_entities.getEntities("enemy"))
+	{
 		if (e->CTransform->pos.x + m_enemyConfig.CR > m_windowConfig.WW || e->CTransform->pos.x - m_enemyConfig.CR < 0)
 		{
 			e->CTransform->velocity.x *= -1;
@@ -164,6 +169,15 @@ void Game::sLifeSpan()
 			e->destroy();
 		}
 	}
+
+	for (auto e : m_entities.getEntities("smallEnemy"))
+	{
+		e->CLifeSpan->remaining--;
+		if (e->CLifeSpan->remaining <= 0)
+		{
+			e->destroy();
+		}
+	}
 }
 
 void Game::sRender()
@@ -195,6 +209,18 @@ void Game::sRender()
 		m_window.draw(bullet->CShape->circle);
 	}
 
+	for (auto smallEnemy : m_entities.getEntities("smallEnemy"))
+	{
+		smallEnemy->CShape->circle.setPosition(smallEnemy->CTransform->pos.x, smallEnemy->CTransform->pos.y);
+
+		smallEnemy->CTransform->angle += 1.0f;
+		auto alpha = smallEnemy->CLifeSpan->remaining > 0 ? (smallEnemy->CLifeSpan->remaining * 0xFF) / smallEnemy->CLifeSpan->total : 0;
+		smallEnemy->CShape->circle.setFillColor(sf::Color(smallEnemy->CShape->circle.getFillColor().r, smallEnemy->CShape->circle.getFillColor().g, smallEnemy->CShape->circle.getFillColor().b, alpha));
+
+		smallEnemy->CShape->circle.setRotation(smallEnemy->CTransform->angle);
+		m_window.draw(smallEnemy->CShape->circle);
+	}
+
 	m_window.display();
 }
 
@@ -218,6 +244,7 @@ void Game::sCollision()
 			auto enemyRad = m_enemyConfig.CR;
 			if ( std::pow(distance.x, 2) + std::pow(distance.y, 2) < std::pow(bulletRad + enemyRad, 2))
 			{
+				spawnSmallEnemies(e);
 				b->destroy();
 				e->destroy();
 			}
@@ -259,12 +286,21 @@ void Game::spawnEnemy()
 	int red = rand() % 0xFF;
 	int green = rand() % 0xFF;
 	int blue = rand() % 0xFF;
-	int vertices = (rand() % 8) + 3;
+	int vertices = (rand() % 5) + 3;
 	entity->CShape = std::make_shared<CShape>(m_enemyConfig.SR, vertices, sf::Color(red, green, blue), sf::Color(0xFF, 0xFF, 0xFF), 2.0f);
 }
 
 void Game::spawnSmallEnemies(std::shared_ptr<Entity> entity)
 {
+	for (int i = 0; i < entity->CShape->circle.getPointCount(); i++)
+	{
+		auto smallEnemy = m_entities.addEntity("smallEnemy");
+		int angle = i * (360 / entity->CShape->circle.getPointCount());
+
+		smallEnemy->CTransform = std::make_shared<CTransform>(Vec2(entity->CTransform->pos), Vec2(6 * std::cos(angle * PI / 180), 6 * std::sin(angle * PI / 180)), 0.0f);
+		smallEnemy->CShape = std::make_shared<CShape>(15, entity->CShape->circle.getPointCount(), entity->CShape->circle.getFillColor(), sf::Color(0, 0, 0), 2);
+		smallEnemy->CLifeSpan = std::make_shared<CLifespan>(15);
+	}
 }
 
 void Game::spawnBullet(std::shared_ptr<Entity> entity, const Vec2& target)
