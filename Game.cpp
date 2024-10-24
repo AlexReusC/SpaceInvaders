@@ -78,8 +78,12 @@ void Game::sMovement()
 	{
 		e->CTransform->pos.x += e->CTransform->velocity.x;
 		e->CTransform->pos.y += e->CTransform->velocity.y;
+	}
 
-
+	for (auto e : m_entities.getEntities("specialWpn"))
+	{
+		e->CTransform->pos.x -= 1;
+		e->CTransform->pos.y -= 1;
 	}
 
 	for (auto e : m_entities.getEntities("enemy"))
@@ -155,6 +159,10 @@ void Game::sUserInput()
 			{
 				spawnBullet(m_player, Vec2(event.mouseButton.x, event.mouseButton.y));
 			}
+			if (event.mouseButton.button == sf::Mouse::Right)
+			{
+				spawnSpecialWeapon();
+			}
 		}
 	}
 }
@@ -171,6 +179,15 @@ void Game::sLifeSpan()
 	}
 
 	for (auto e : m_entities.getEntities("smallEnemy"))
+	{
+		e->CLifeSpan->remaining--;
+		if (e->CLifeSpan->remaining <= 0)
+		{
+			e->destroy();
+		}
+	}
+
+	for (auto e : m_entities.getEntities("specialWpn"))
 	{
 		e->CLifeSpan->remaining--;
 		if (e->CLifeSpan->remaining <= 0)
@@ -209,6 +226,17 @@ void Game::sRender()
 		m_window.draw(bullet->CShape->circle);
 	}
 
+	for (auto specialWpn : m_entities.getEntities("specialWpn"))
+	{
+		specialWpn->CShape->circle.setPosition(specialWpn->CTransform->pos.x, specialWpn->CTransform->pos.y );
+		specialWpn->CShape->circle.setRadius(specialWpn->CShape->circle.getRadius() + 1);
+		auto alpha = specialWpn->CLifeSpan->remaining > 0 ? (specialWpn->CLifeSpan->remaining * 0xFF) / specialWpn->CLifeSpan->total : 0;
+		specialWpn->CShape->circle.setOutlineColor(sf::Color(0xFF, 0, 0, alpha));
+
+
+		m_window.draw(specialWpn->CShape->circle);
+	}
+
 	for (auto smallEnemy : m_entities.getEntities("smallEnemy"))
 	{
 		smallEnemy->CShape->circle.setPosition(smallEnemy->CTransform->pos.x, smallEnemy->CTransform->pos.y);
@@ -226,7 +254,7 @@ void Game::sRender()
 
 void Game::sEnemySpawner()
 {
-	if ( m_currentFrame - m_lastEnemySpawnTime >= 30)
+	if ( m_currentFrame - m_lastEnemySpawnTime >= 220)
 	{
 		spawnEnemy();
 		m_currentFrame = m_lastEnemySpawnTime;
@@ -243,6 +271,34 @@ void Game::sCollision()
 			auto bulletRad = b->CShape->circle.getRadius();
 			auto enemyRad = m_enemyConfig.CR;
 			if ( std::pow(distance.x, 2) + std::pow(distance.y, 2) < std::pow(bulletRad + enemyRad, 2))
+			{
+				spawnSmallEnemies(e);
+				b->destroy();
+				e->destroy();
+			}
+		}
+	}
+
+	for (auto e : m_entities.getEntities("enemy"))
+	{
+		auto distance = e->CTransform->pos - m_player->CTransform->pos;
+		auto enemyRad = e->CShape->circle.getRadius();
+		auto playerRad = m_enemyConfig.CR;
+		if (std::pow(distance.x, 2) + std::pow(distance.y, 2) < std::pow(enemyRad + playerRad, 2))
+		{
+			m_player->destroy();
+			spawnPlayer();
+		}
+	}
+
+	for (auto b : m_entities.getEntities("specialWpn"))
+	{
+		for (auto e : m_entities.getEntities("enemy"))
+		{
+			auto distance = b->CTransform->pos - e->CTransform->pos;
+			auto bulletRad = b->CShape->circle.getRadius();
+			auto enemyRad = m_enemyConfig.CR;
+			if (std::pow(distance.x, 2) + std::pow(distance.y, 2) < std::pow(bulletRad + enemyRad, 2))
 			{
 				spawnSmallEnemies(e);
 				b->destroy();
@@ -316,6 +372,10 @@ void Game::spawnBullet(std::shared_ptr<Entity> entity, const Vec2& target)
 	bullet->CLifeSpan = std::make_shared<CLifespan>(60);
 }
 
-void Game::spawnSpecialWeapon(std::shared_ptr<Entity> entity)
+void Game::spawnSpecialWeapon()
 {
+	auto specialWpn = m_entities.addEntity("specialWpn");
+	specialWpn->CTransform = std::make_shared<CTransform>(Vec2(m_player->CTransform->pos), Vec2(0, 0), 0);
+	specialWpn->CShape = std::make_shared<CShape>(32.0f, 20, sf::Color(0, 0, 0, 0), sf::Color(0xFF, 0, 0), 4.0f);
+	specialWpn->CLifeSpan = std::make_shared<CLifespan>(50);
 }
